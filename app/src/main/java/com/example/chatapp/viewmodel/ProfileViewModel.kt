@@ -2,16 +2,18 @@ package com.example.chatapp.viewmodel
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.example.chatapp.data.model.User
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.*
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 
 class ProfileViewModel : ViewModel() {
+
+    private val auth = FirebaseAuth.getInstance()
+    private val database = FirebaseDatabase.getInstance().reference
+    private val storage = FirebaseStorage.getInstance().reference
 
     private val _user = MutableStateFlow<User?>(null)
     val user: StateFlow<User?> = _user
@@ -19,79 +21,64 @@ class ProfileViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val auth = FirebaseAuth.getInstance()
-    private val database = FirebaseDatabase.getInstance().reference
-    private val storage = FirebaseStorage.getInstance().reference
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading
 
     init {
-        fetchUser()
+        loadUserProfile()
     }
 
-    private fun fetchUser() {
+    private fun loadUserProfile() {
+        val uid = auth.currentUser?.uid ?: return
         _isLoading.value = true
-        val userId = auth.currentUser?.uid ?: return
-        database.child("users").child(userId).get().addOnSuccessListener {
-            _user.value = it.getValue(User::class.java)
-            _isLoading.value = false
-        }.addOnFailureListener {
-            _isLoading.value = false
-            // Handle error
-        }
+
+        database.child("users").child(uid)
+            .addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    _user.value = snapshot.getValue(User::class.java)
+                    _isLoading.value = false
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    _isLoading.value = false
+                }
+            })
     }
 
-    fun updateProfile(name: String, phone: String, status: String) {
-        _isLoading.value = true
-        val userId = auth.currentUser?.uid ?: return
+    fun updateProfile(name: String, username: String, status: String) {
+        val uid = auth.currentUser?.uid ?: return
         val updates = mapOf(
             "name" to name,
-            "phone" to phone,
+            "username" to username,
             "status" to status
         )
-        database.child("users").child(userId).updateChildren(updates).addOnCompleteListener {
-            _isLoading.value = false
-            fetchUser() // Refresh user data
-        }
+        database.child("users").child(uid).updateChildren(updates)
     }
 
-    fun updateProfileImage(imageUri: Uri) {
-        _isLoading.value = true
-        val userId = auth.currentUser?.uid ?: return
-        val imageRef = storage.child("profileImages/$userId.jpg")
+    /**
+     * Upload selected image (PNG/JPG/etc) to Firebase Storage and
+     * save its download URL to users/{uid}/profileImage
+     */
+    fun uploadProfileImage(imageUri: Uri) {
+        val uid = auth.currentUser?.uid ?: return
+        _isUploading.value = true
 
-        imageRef.putFile(imageUri).continueWithTask { task ->
-            if (!task.isSuccessful) {
-                task.exception?.let {
-                    throw it
-                }
-            }
-            imageRef.downloadUrl
-        }.addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val downloadUri = task.result
-                database.child("users").child(userId).child("profileImage").setValue(downloadUri.toString())
-                    .addOnCompleteListener {
-                        _isLoading.value = false
-                        fetchUser() // Refresh user data
-                    }
-            } else {
-                _isLoading.value = false
-                // Handle failure
-            }
-        }
-    }
+        // You can use .png or .jpg in the path; both work for any image type.
+        val imageRef = storage.child("profile_images/$uid.png")
 
-    fun logout() {
-        auth.signOut()
-    }
-
-    fun deleteAccount() {
-        viewModelScope.launch {
-            val userId = auth.currentUser?.uid ?: return@launch
-            auth.currentUser?.delete()?.addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    database.child("users").child(userId).removeValue()
-                }
+        imageRef.putFile(imageUri)
+            .continueWithTask { task ->
+                if (!task.isSuccessful) task.exception?.let { throw it }
+                imageRef.downloadUrl
             }
-        }
+            .addOnSuccessListener { downloadUri ->
+                database.child("users").child(uid)
+                    .child("profileImage")
+                    .setValue(downloadUri.toString())
+                _isUploading.value = false
+            }
+            .addOnFailureListener {
+                _isUploading.value = false
+            }
     }
 }

@@ -22,13 +22,11 @@ fun UserListItem(
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
     onClick: () -> Unit
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = modifier
+        .fillMaxWidth()
+        .clickable { onClick() }
+        .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         Image(
             painter = rememberAsyncImagePainter(user.profileImage),
             contentDescription = "Profile Picture",
@@ -42,16 +40,15 @@ fun UserListItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = user.name,
-                style = MaterialTheme.typography.bodyLarge
+                text = user.name, style = MaterialTheme.typography.bodyLarge
             )
-            user.status?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+             user.status?.let {
+                 Text(
+                     text = it,
+                     style = MaterialTheme.typography.bodyMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                 )
+             }
         }
 
         // Fixed: Properly invoke the trailing content within RowScope

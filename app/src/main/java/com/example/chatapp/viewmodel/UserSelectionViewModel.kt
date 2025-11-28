@@ -56,7 +56,7 @@ class UserSelectionViewModel : ViewModel() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val userList = snapshot.children.mapNotNull {
                     it.getValue(User::class.java)
-                }.filter { it.uid != currentUserId }
+                }.filter { it.uid.isNotEmpty() && it.uid != currentUserId }
                 _users.value = userList
                 _isLoading.value = false
             }
@@ -75,7 +75,7 @@ class UserSelectionViewModel : ViewModel() {
     fun createChat(receiverId: String, onComplete: (String) -> Unit) {
         viewModelScope.launch {
             val senderId = auth.currentUser?.uid ?: return@launch
-            val chatId = ChatUtils.getChatId(senderId, receiverId)
+            val chatId = ChatUtils.createChatId(senderId, receiverId)
 
             val chatSnapshot = database.child("chats").child(chatId).get().await()
             if (chatSnapshot.exists()) {

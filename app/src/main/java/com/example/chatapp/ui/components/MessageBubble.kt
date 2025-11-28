@@ -59,7 +59,7 @@ fun MessageBubble(
                     )
                 }
                 if (message.type == "text") {
-                    Text(text = message.text)
+                    Text(text = message.message)
                 } else {
                     Image(
                         painter = rememberAsyncImagePainter(message.imageUrl),

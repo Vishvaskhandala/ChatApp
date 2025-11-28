@@ -1,18 +1,24 @@
 package com.example.chatapp.utils
 
-/**
- * A utility object for chat-related helper functions.
- */
 object ChatUtils {
 
     /**
-     * Creates a consistent, unique chat ID for a one-to-one chat between two users.
-     *
-     * @param userId1 The ID of the first user.
-     * @param userId2 The ID of the second user.
-     * @return A unique string ID for the chat, created by sorting the user IDs alphabetically and joining them with an underscore.
+     * Creates a consistent, sorted chat ID from two user IDs.
+     * @param user1 The first user's ID.
+     * @param user2 The second user's ID.
+     * @return A chat ID string in the format "higherId-lowerId".
      */
-    fun getChatId(userId1: String, userId2: String): String {
-        return if (userId1 < userId2) "${userId1}_${userId2}" else "${userId2}_${userId1}"
+    fun createChatId(user1: String, user2: String): String {
+        return if (user1 > user2) "$user1-$user2" else "$user2-$user1"
+    }
+
+    /**
+     * Extracts the other user's (peer) ID from a chat ID.
+     * @param chatId The chat ID (e.g., "higherId-lowerId").
+     * @param currentUserId The ID of the current user.
+     * @return The ID of the other user in the chat.
+     */
+    fun getPeerId(chatId: String, currentUserId: String): String {
+        return chatId.replace(currentUserId, "").replace("-", "")
     }
 }

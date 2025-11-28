@@ -45,7 +45,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.chatapp.viewmodel.SignupState
+// REMOVED: import com.example.chatapp.viewmodel.SignupState <-- This caused the error
 import com.example.chatapp.viewmodel.SignupViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,12 +69,13 @@ fun SignupScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(signupState) {
+        // FIXED: Reference SignupState through SignupViewModel
         when (val state = signupState) {
-            is SignupState.Success -> {
+            is SignupViewModel.SignupState.Success -> {
                 // Navigate to login or chatlist
                 onLoginClick()
             }
-            is SignupState.Error -> {
+            is SignupViewModel.SignupState.Error -> {
                 snackbarHostState.showSnackbar(message = state.message)
                 viewModel.resetState()
             }
@@ -113,7 +114,7 @@ fun SignupScreen(
                     label = { Text("Username") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    enabled = signupState !is SignupState.Loading
+                    enabled = signupState !is SignupViewModel.SignupState.Loading // FIXED: Reference SignupState through SignupViewModel
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -134,7 +135,7 @@ fun SignupScreen(
                             Text("Please enter a valid email.")
                         }
                     },
-                    enabled = signupState !is SignupState.Loading
+                    enabled = signupState !is SignupViewModel.SignupState.Loading // FIXED: Reference SignupState through SignupViewModel
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -157,7 +158,7 @@ fun SignupScreen(
                             Icon(imageVector = image, description)
                         }
                     },
-                    enabled = signupState !is SignupState.Loading
+                    enabled = signupState !is SignupViewModel.SignupState.Loading // FIXED: Reference SignupState through SignupViewModel
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -167,9 +168,9 @@ fun SignupScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
-                    enabled = username.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty() && isEmailValid && signupState !is SignupState.Loading
+                    enabled = username.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty() && isEmailValid && signupState !is SignupViewModel.SignupState.Loading // FIXED: Reference SignupState through SignupViewModel
                 ) {
-                    if (signupState is SignupState.Loading) {
+                    if (signupState is SignupViewModel.SignupState.Loading) { // FIXED: Reference SignupState through SignupViewModel
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.onPrimary
@@ -187,7 +188,7 @@ fun SignupScreen(
                     Text("Already have an account?")
                     TextButton(
                         onClick = onLoginClick,
-                        enabled = signupState !is SignupState.Loading
+                        enabled = signupState !is SignupViewModel.SignupState.Loading // FIXED: Reference SignupState through SignupViewModel
                     ) {
                         Text("Login")
                     }

@@ -39,25 +39,35 @@ import com.example.chatapp.utils.ComposeFileProvider
 import com.example.chatapp.viewmodel.ChatViewModel
 import com.example.chatapp.viewmodel.UploadState
 import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     navController: NavController,
     viewModel: ChatViewModel = viewModel(),
-    receiverId: String
+    chatId: String
 ) {
     val messages by viewModel.messages.collectAsState()
     val typingStatus by viewModel.typingStatus.collectAsState()
     val uploadState by viewModel.uploadState.collectAsState()
     val receiverUser by viewModel.receiverUser.collectAsState()
+    val error by viewModel.error.collectAsState()
+
     var text by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var showImageDialog by remember { mutableStateOf(false) }
     var fullScreenImageUrl by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
+    // Use the centralized utility to get the peer ID
+    val receiverId = remember(chatId, currentUserId) {
+        ChatUtils.getPeerId(chatId, currentUserId)
+    }
+
     var hasCamPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -78,9 +88,7 @@ fun ChatScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri: Uri? ->
-            uri?.let {
-                viewModel.uploadImage(context, receiverId, it)
-            }
+            uri?.let { viewModel.uploadImage(context, chatId, it) }
         }
     )
 
@@ -88,38 +96,40 @@ fun ChatScreen(
         contract = ActivityResultContracts.TakePicture(),
         onResult = { success ->
             if (success) {
-                imageUri?.let { viewModel.uploadImage(context, receiverId, it) }
+                imageUri?.let { viewModel.uploadImage(context, chatId, it) }
             }
         }
     )
 
-    DisposableEffect(Unit) {
-        MyFirebaseMessagingService.isChatScreenOpen = true
-        MyFirebaseMessagingService.currentChatId = ChatUtils.getChatId(FirebaseAuth.getInstance().currentUser?.uid ?: "", receiverId)
-        onDispose {
-            MyFirebaseMessagingService.isChatScreenOpen = false
-            MyFirebaseMessagingService.currentChatId = null
-            viewModel.setTypingStatus(receiverId, false)
+    // Show snackbar on error
+    LaunchedEffect(error) {
+        error?.let {
+            snackbarHostState.showSnackbar(
+                message = it,
+                duration = SnackbarDuration.Long
+            )
+            viewModel.resetError() // Reset error after showing
         }
     }
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(chatId) {
+        MyFirebaseMessagingService.isChatScreenOpen = true
+        MyFirebaseMessagingService.currentChatId = chatId
+        onDispose {
+            MyFirebaseMessagingService.isChatScreenOpen = false
+            MyFirebaseMessagingService.currentChatId = null
+        }
+    }
+
+    LaunchedEffect(chatId, receiverId) {
         viewModel.getReceiverUser(receiverId)
-        viewModel.getMessages(receiverId)
-        viewModel.markMessagesAsSeen(receiverId)
-        viewModel.listenForTypingStatus(receiverId)
+        viewModel.getMessages(chatId)
     }
 
     LaunchedEffect(messages) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
-    }
-    
-    LaunchedEffect(text) {
-        viewModel.setTypingStatus(receiverId, text.isNotBlank())
-        delay(2000)
-        viewModel.setTypingStatus(receiverId, false)
     }
 
     if (fullScreenImageUrl != null) {
@@ -128,6 +138,7 @@ fun ChatScreen(
         }
     } else {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -135,9 +146,7 @@ fun ChatScreen(
                             Image(
                                 painter = rememberAsyncImagePainter(receiverUser?.profileImage),
                                 contentDescription = "Profile Picture",
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape),
+                                modifier = Modifier.size(40.dp).clip(CircleShape),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -145,9 +154,6 @@ fun ChatScreen(
                                 Text(text = receiverUser?.name ?: "")
                                 AnimatedVisibility(visible = typingStatus) {
                                     TypingIndicator()
-                                }
-                                if (receiverUser?.online == true && !typingStatus) {
-                                    Text(text = "Online", style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -162,15 +168,14 @@ fun ChatScreen(
             bottomBar = {
                 Column {
                     if (uploadState is UploadState.InProgress) {
+                        val progressValue = (uploadState as UploadState.InProgress).progress
                         LinearProgressIndicator(
-                            progress = (uploadState as UploadState.InProgress).progress,
+                            progress = progressValue,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                     Row(
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .fillMaxWidth(),
+                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { showImageDialog = true }) {
@@ -184,7 +189,7 @@ fun ChatScreen(
                         )
                         IconButton(onClick = {
                             if (text.isNotBlank()) {
-                                viewModel.sendMessage(receiverId, text)
+                                viewModel.sendMessage(chatId, text)
                                 text = ""
                             }
                         }) {
@@ -196,13 +201,11 @@ fun ChatScreen(
         ) { paddingValues ->
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .padding(paddingValues)
-                    .fillMaxSize(),
+                modifier = Modifier.padding(paddingValues).fillMaxSize(),
                 reverseLayout = true
             ) {
-                items(messages.reversed()) { message ->
-                    MessageBubble(message = message, isSender = message.senderId == FirebaseAuth.getInstance().currentUser?.uid) {
+                items(messages.reversed(), key = { it.id }) { message ->
+                    MessageBubble(message = message, isSender = message.senderId == currentUserId) {
                         if (message.imageUrl != null) {
                             fullScreenImageUrl = message.imageUrl
                         }
@@ -218,17 +221,18 @@ fun ChatScreen(
             title = { Text("Choose Image Source") },
             text = {
                 Column {
-                    TextButton(onClick = { 
+                    TextButton(onClick = {
                         galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        showImageDialog = false 
+                        showImageDialog = false
                     }) {
                         Text("Gallery")
                     }
                     TextButton(
                         onClick = {
                             if (hasCamPermission) {
-                                imageUri = ComposeFileProvider.getImageUri(context)
-                                imageUri?.let { cameraLauncher.launch(it) }
+                                val newImageUri = ComposeFileProvider.getImageUri(context)
+                                imageUri = newImageUri
+                                newImageUri?.let { cameraLauncher.launch(it) }
                             } else {
                                 permissionLauncher.launch(Manifest.permission.CAMERA)
                             }

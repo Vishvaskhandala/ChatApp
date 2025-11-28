@@ -1,64 +1,30 @@
 package com.example.chatapp.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
-import com.example.chatapp.R
-import com.example.chatapp.utils.ComposeFileProvider
+import com.example.chatapp.data.model.User
 import com.example.chatapp.viewmodel.ProfileViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,54 +34,14 @@ fun ProfileScreen(
 ) {
     val user by viewModel.user.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    var isEditing by rememberSaveable { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showImageSourceDialog by remember { mutableStateOf(false) }
+    val isUploading by viewModel.isUploading.collectAsState()
+    var showEditDialog by remember { mutableStateOf(false) }
 
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("") }
-
-    val context = LocalContext.current
-    var hasCamPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { granted ->
-            hasCamPermission = granted
-        }
-    )
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri: Uri? ->
-            uri?.let { viewModel.updateProfileImage(it) }
-        }
-    )
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture(),
-        onResult = { success ->
-            if (success) {
-                imageUri?.let { viewModel.updateProfileImage(it) }
-            }
-        }
-    )
-
-    LaunchedEffect(user) {
-        user?.let {
-            name = it.name
-            phone = it.phone
-            status = it.status
-        }
+    // Gallery picker
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.uploadProfileImage(it) }
     }
 
     Scaffold(
@@ -123,168 +49,229 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text("Profile") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { isEditing = !isEditing }) {
+                    IconButton(onClick = { showEditDialog = true }) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit")
                     }
                 }
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
             if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center)
+                )
             } else {
-                user?.let { currentUser ->
-                    Column(
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Profile Image
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { imagePickerLauncher.launch("image/*") } // <-- tap to pick image
                     ) {
-                        Box(modifier = Modifier.clickable { showImageSourceDialog = true }) {
+                        if (user?.profileImage?.isNotEmpty() == true) {
                             Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = currentUser.profileImage,
-                                    placeholder = painterResource(id = R.drawable.ic_launcher_background),
-                                    error = painterResource(id = R.drawable.ic_launcher_background)
-                                ),
+                                painter = rememberAsyncImagePainter(model = user?.profileImage),
                                 contentDescription = "Profile Picture",
-                                modifier = Modifier
-                                    .size(150.dp)
-                                    .clip(CircleShape),
+                                modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            // Default profile icon when no image set
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Default Profile",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        OutlinedTextField(value = name, onValueChange = {name = it}, label = {Text("Name")}, enabled = isEditing)
-                        OutlinedTextField(value = phone, onValueChange = {phone = it}, label = {Text("Phone")}, enabled = isEditing)
-                        OutlinedTextField(value = status, onValueChange = {status = it}, label = {Text("Status")}, enabled = isEditing)
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text("Email: ${currentUser.email}")
-                        Text("Member since: ${SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(Date(currentUser.createdAt))}")
-
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        if (isEditing) {
-                            Button(onClick = { viewModel.updateProfile(name, phone, status) }) {
-                                Text("Save")
+                        // Small overlay icon or loader
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                .padding(6.dp)
+                        ) {
+                            if (isUploading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = "Change Picture",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
-                        
-                        Button(onClick = { showLogoutDialog = true }) {
-                            Text("Logout")
-                        }
+                    }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                        TextButton(onClick = { showDeleteDialog = true }) {
-                            Text("Delete Account", color = MaterialTheme.colorScheme.error)
-                        }
+                    // User Info
+                    user?.let { currentUser ->
+                        ProfileInfoCard(
+                            title = "Name",
+                            value = currentUser.name.ifEmpty { currentUser.username },
+                            icon = Icons.Default.Person
+                        )
+
+                        ProfileInfoCard(
+                            title = "Username",
+                            value = currentUser.username,
+                            icon = Icons.Default.AlternateEmail
+                        )
+
+                        ProfileInfoCard(
+                            title = "Status",
+                            value = currentUser.status,
+                            icon = Icons.Default.Info
+                        )
+
+                        ProfileInfoCard(
+                            title = "Email",
+                            value = currentUser.email,
+                            icon = Icons.Default.Email
+                        )
+
+                        ProfileInfoCard(
+                            title = "Availability",
+                            value = if (currentUser.online) "Online" else "Offline",
+                            icon = Icons.Default.Circle,
+                            tint = if (currentUser.online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
+        }
+    }
 
-            if (showImageSourceDialog) {
-                AlertDialog(
-                    onDismissRequest = { showImageSourceDialog = false },
-                    title = { Text("Update Profile Picture") },
-                    text = { Text("Choose an option") },
-                    confirmButton = {
-                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
-                            TextButton(
-                                onClick = { 
-                                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                    showImageSourceDialog = false 
-                                }
-                            ) {
-                                Text("Gallery")
-                            }
-                            TextButton(
-                                onClick = {
-                                    if (hasCamPermission) {
-                                        imageUri = ComposeFileProvider.getImageUri(context)
-                                        imageUri?.let { cameraLauncher.launch(it) }
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.CAMERA)
-                                    }
-                                    showImageSourceDialog = false
-                                }
-                            ) {
-                                Text("Camera")
-                            }                            
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showImageSourceDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
-                )
+    if (showEditDialog) {
+        EditProfileDialog(
+            user = user,
+            onDismiss = { showEditDialog = false },
+            onSave = { name, username, status ->
+                viewModel.updateProfile(name, username, status)
+                showEditDialog = false
             }
+        )
+    }
+}
 
-            if (showLogoutDialog) {
-                AlertDialog(
-                    onDismissRequest = { showLogoutDialog = false },
-                    title = { Text("Logout") },
-                    text = { Text("Are you sure you want to logout?") },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                viewModel.logout()
-                                showLogoutDialog = false
-                                navController.navigate("login") {
-                                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                }
-                            }
-                        ) {
-                            Text("Logout")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showLogoutDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
+@Composable
+fun ProfileInfoCard(
+    title: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-
-            if (showDeleteDialog) {
-                AlertDialog(
-                    onDismissRequest = { showDeleteDialog = false },
-                    title = { Text("Delete Account") },
-                    text = { Text("This action is irreversible. Are you sure you want to delete your account?") },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                viewModel.deleteAccount()
-                                showDeleteDialog = false
-                                navController.navigate("login") {
-                                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                }
-                            }
-                        ) {
-                            Text("Delete", color = MaterialTheme.colorScheme.error)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showDeleteDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditProfileDialog(
+    user: User?,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String) -> Unit
+) {
+    var name by remember { mutableStateOf(user?.name ?: "") }
+    var username by remember { mutableStateOf(user?.username ?: "") }
+    var status by remember { mutableStateOf(user?.status ?: "Hey there! I'm using ChatApp") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Profile") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = status,
+                    onValueChange = { status = it },
+                    label = { Text("Status") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name, username, status) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

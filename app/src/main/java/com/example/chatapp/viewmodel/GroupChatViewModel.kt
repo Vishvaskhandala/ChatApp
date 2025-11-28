@@ -81,7 +81,7 @@ class GroupChatViewModel : ViewModel() {
             id = messageId,
             senderId = senderId,
             receiverId = groupId, // For group messages, store groupId here
-            text = text,
+            message = text,
             timestamp = System.currentTimeMillis(),
             type = "text"
         )

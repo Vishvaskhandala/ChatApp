@@ -36,9 +36,29 @@ import com.example.chatapp.viewmodel.ChatListViewModel
 fun ChatListScreen(navController: NavController, viewModel: ChatListViewModel = viewModel()) {
     val chats by viewModel.chats.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val error by viewModel.error.collectAsState()
+
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+
+    // Show error snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(error) {
+        error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.resetError()
+        }
+    }
+
+    // Set online status when screen is visible
+    DisposableEffect(Unit) {
+        viewModel.setOnlineStatus(true)
+        onDispose {
+            viewModel.setOnlineStatus(false)
+        }
+    }
 
     BackHandler(isSearchActive) {
         isSearchActive = false
@@ -47,6 +67,7 @@ fun ChatListScreen(navController: NavController, viewModel: ChatListViewModel = 
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -151,12 +172,23 @@ fun ChatListScreen(navController: NavController, viewModel: ChatListViewModel = 
                 .padding(paddingValues)
         ) {
             if (isRefreshing) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                )
             }
 
-            AnimatedVisibility(visible = chats.isEmpty() && !isRefreshing) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No chats yet")
+            if (chats.isEmpty() && !isRefreshing) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No chats yet.\nTap + to start a new conversation!",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -200,8 +232,11 @@ fun ChatListScreen(navController: NavController, viewModel: ChatListViewModel = 
                     ) {
                         ChatListItem(chatItem = chat) {
                             if (chat.isGroup) {
+                                // Navigate to group chat with groupId
                                 navController.navigate("groupChat/${chat.id}")
                             } else {
+                                // Navigate to personal chat with chatId
+                                // chat.id contains the chatId (e.g., "userId1-userId2")
                                 navController.navigate("chat/${chat.id}")
                             }
                         }

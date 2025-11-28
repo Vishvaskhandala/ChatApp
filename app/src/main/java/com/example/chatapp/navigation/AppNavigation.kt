@@ -56,12 +56,13 @@ fun AppNavigation() {
             val groupId = it.arguments?.getString("groupId") ?: ""
             AddMemberScreen(navController = navController, groupId = groupId)
         }
+        // FIXED: Changed parameter name from receiverId to chatId for clarity
         composable(
-            "chat/{receiverId}",
-            arguments = listOf(navArgument("receiverId") { type = NavType.StringType })
+            "chat/{chatId}",
+            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
         ) {
-            val receiverId = it.arguments?.getString("receiverId") ?: ""
-            ChatScreen(navController = navController, receiverId = receiverId)
+            val chatId = it.arguments?.getString("chatId") ?: ""
+            ChatScreen(navController = navController, chatId = chatId)
         }
         composable(
             "groupChat/{groupId}",
